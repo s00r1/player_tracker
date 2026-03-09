@@ -1,0 +1,1782 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Football Player Tracker V4</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: #05070a;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .box {
+      position: relative;
+      border: 1px solid #111;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(0,255,170,0.04), rgba(255,0,255,0.02)),
+        #0a0d12;
+    }
+
+    .box::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        repeating-linear-gradient(
+          0deg,
+          rgba(0,255,120,0.04) 0px,
+          rgba(0,255,120,0.04) 1px,
+          transparent 1px,
+          transparent 24px
+        );
+      pointer-events: none;
+    }
+
+    .inner {
+      position: absolute;
+      inset: 0;
+      padding: 14px;
+      color: #d8ffe8;
+      z-index: 2;
+      overflow: auto;
+    }
+
+    .inner::-webkit-scrollbar,
+    .stats-scroll::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .inner::-webkit-scrollbar-thumb,
+    .stats-scroll::-webkit-scrollbar-thumb {
+      background: rgba(0,255,170,0.18);
+      border-radius: 10px;
+    }
+
+    h3, .section-title {
+      margin: 0 0 12px 0;
+      color: #8fffd1;
+      font-size: 14px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .mode-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .mode-btn {
+      background: rgba(255,255,255,0.03);
+      color: #bfffe9;
+      border: 1px solid rgba(0,255,170,0.12);
+      border-radius: 12px;
+      padding: 10px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.15s ease;
+    }
+
+    .mode-btn.active {
+      background: rgba(0,255,170,0.12);
+      color: #e5fff5;
+      border-color: rgba(0,255,170,0.24);
+      box-shadow: 0 0 10px rgba(0,255,170,0.08);
+    }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .row.wrap { flex-wrap: wrap; }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      flex: 1;
+      min-width: 0;
+      background: rgba(8,18,24,0.8);
+      border: 1px solid rgba(0,255,170,0.2);
+      color: #d8ffe8;
+      border-radius: 12px;
+      padding: 12px;
+      outline: none;
+      box-shadow: inset 0 0 12px rgba(0,255,170,0.04);
+    }
+
+    input::placeholder {
+      color: rgba(216,255,232,0.38);
+    }
+
+    button {
+      background: rgba(0,255,170,0.14);
+      color: #d8ffe8;
+      border: 1px solid rgba(0,255,170,0.25);
+      border-radius: 12px;
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    button:hover {
+      background: rgba(0,255,170,0.22);
+      box-shadow: 0 0 14px rgba(0,255,170,0.12);
+    }
+
+    button:disabled,
+    select:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .status {
+      margin-top: 10px;
+      color: #9fffd8;
+      font-size: 12px;
+      min-height: 18px;
+      white-space: pre-wrap;
+    }
+
+    .help {
+      margin-top: 10px;
+      color: #7ea194;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .quick-targets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+      margin-bottom: 12px;
+    }
+
+    .quick-chip {
+      background: rgba(255,255,255,0.03);
+      color: #bfffe9;
+      border: 1px solid rgba(0,255,170,0.10);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .quick-chip:hover {
+      background: rgba(0,255,170,0.08);
+    }
+
+    .player-top {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: 12px;
+      align-items: start;
+      margin-top: 12px;
+    }
+
+    .player-photo {
+      width: 92px;
+      height: 92px;
+      border-radius: 14px;
+      object-fit: cover;
+      border: 1px solid rgba(0,255,170,0.18);
+      background: rgba(255,255,255,0.03);
+      box-shadow: 0 0 16px rgba(0,255,170,0.08);
+      visibility: hidden;
+    }
+
+    .player-main { min-width: 0; }
+
+    .player-name {
+      color: #d8ffe8;
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 6px;
+      line-height: 1.2;
+    }
+
+    .player-sub {
+      color: #7ea194;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .intel-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .intel-card {
+      background: rgba(4, 10, 14, 0.82);
+      border: 1px solid rgba(0,255,170,0.14);
+      border-radius: 12px;
+      padding: 10px;
+      box-shadow: inset 0 0 20px rgba(0,255,170,0.03);
+      min-height: 56px;
+    }
+
+    .intel-card.full { grid-column: 1 / -1; }
+
+    .intel-label {
+      color: #6f998d;
+      font-size: 11px;
+      letter-spacing: 0.8px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+
+    .intel-value {
+      color: #d8ffe8;
+      font-size: 13px;
+      line-height: 1.35;
+      word-break: break-word;
+      text-shadow: 0 0 6px rgba(0,255,170,0.05);
+    }
+
+    .intel-value.blue { color: #4da6ff; }
+    .intel-value.green { color: #39ff14; }
+    .intel-value.orange { color: #ffb347; }
+    .intel-value.red { color: #ff6b6b; }
+    .intel-value.purple { color: #c084ff; }
+    .intel-value.cyan { color: #33d1ff; }
+
+    .summary-box {
+      background: rgba(4, 10, 14, 0.82);
+      border: 1px solid rgba(0,255,170,0.14);
+      border-radius: 12px;
+      padding: 10px;
+      color: #bfffe9;
+      font-size: 12px;
+      line-height: 1.5;
+      margin-top: 12px;
+    }
+
+    .summary-box strong { color: #8fffd1; }
+
+    .map-title {
+      position: absolute;
+      top: 10px;
+      left: 12px;
+      z-index: 999;
+      color: #8fffd1;
+      font-size: 13px;
+      letter-spacing: 1px;
+      padding: 6px 10px;
+      border: 1px solid rgba(0,255,170,0.25);
+      background: rgba(3,8,12,0.65);
+      border-radius: 8px;
+      box-shadow: 0 0 12px rgba(0,255,170,0.12);
+      pointer-events: none;
+    }
+
+    .map-badge {
+      position: absolute;
+      right: 12px;
+      top: 10px;
+      z-index: 999;
+      color: #bfffe9;
+      font-size: 11px;
+      padding: 6px 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,255,170,0.16);
+      background: rgba(4,10,14,0.72);
+      box-shadow: 0 0 12px rgba(0,255,170,0.06);
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      background: #05070a;
+      position: relative;
+      z-index: 1;
+    }
+
+    .leaflet-container { background: #05070a; }
+
+    .leaflet-control-attribution {
+      background: rgba(0,0,0,0.55);
+      color: #9aa7b5;
+      font-size: 11px;
+    }
+
+    .leaflet-control-attribution a { color: #6ae3ff; }
+
+    .stats-scroll {
+      height: 100%;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .stat-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .choice-row,
+    .club-row {
+      background: rgba(4, 10, 14, 0.82);
+      border: 1px solid rgba(0,255,170,0.14);
+      border-radius: 12px;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 46px 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .choice-avatar,
+    .club-logo {
+      width: 46px;
+      height: 46px;
+      object-fit: contain;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.03);
+      padding: 4px;
+      border: 1px solid rgba(0,255,170,0.10);
+    }
+
+    .choice-main,
+    .club-main {
+      min-width: 0;
+    }
+
+    .choice-name,
+    .club-name {
+      color: #d8ffe8;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .choice-sub,
+    .club-sub {
+      color: #7ea194;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .choice-action,
+    .club-season {
+      color: #39ff14;
+      font-size: 12px;
+      white-space: nowrap;
+      border: 1px solid rgba(0,255,170,0.14);
+      border-radius: 999px;
+      padding: 6px 8px;
+      background: rgba(0,255,170,0.05);
+    }
+
+    .empty-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 220px;
+      color: #60706b;
+      font-size: 18px;
+      text-align: center;
+      padding: 24px;
+      line-height: 1.5;
+    }
+
+    .radar-layout {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .radar-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .radar-title {
+      color: #8fffd1;
+      font-size: 13px;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    .radar-shell {
+      position: relative;
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      border: 1px solid rgba(0,255,170,0.28);
+      background:
+        radial-gradient(circle at center, rgba(0,255,170,0.12), rgba(0,0,0,0.05) 45%, rgba(0,0,0,0.0) 60%),
+        rgba(4, 10, 14, 0.82);
+      box-shadow:
+        inset 0 0 30px rgba(0,255,170,0.05),
+        0 0 20px rgba(0,255,170,0.08);
+      overflow: hidden;
+    }
+
+    .radar-ring,
+    .radar-ring::before,
+    .radar-ring::after {
+      content: "";
+      position: absolute;
+      inset: 18%;
+      border: 1px solid rgba(0,255,170,0.12);
+      border-radius: 50%;
+    }
+
+    .radar-ring::before { inset: -28%; }
+    .radar-ring::after { inset: 28%; }
+
+    .radar-cross-x,
+    .radar-cross-y {
+      position: absolute;
+      background: rgba(0,255,170,0.10);
+    }
+
+    .radar-cross-x {
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 1px;
+      transform: translateY(-50%);
+    }
+
+    .radar-cross-y {
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+      transform: translateX(-50%);
+    }
+
+    .radar-sweep {
+      position: absolute;
+      inset: -8%;
+      border-radius: 50%;
+      background: conic-gradient(
+        from 0deg,
+        rgba(0,255,170,0.00) 0deg,
+        rgba(0,255,170,0.03) 280deg,
+        rgba(0,255,170,0.10) 330deg,
+        rgba(0,255,170,0.32) 360deg
+      );
+      animation: radarSpin 3.6s linear infinite;
+      transform-origin: center;
+    }
+
+    .radar-center {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #00ffaa;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 12px rgba(0,255,170,0.55);
+      z-index: 3;
+    }
+
+    .radar-dot {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #00ffaa;
+      box-shadow: 0 0 10px rgba(0,255,170,0.4);
+      opacity: 0.25;
+      transition: all 0.25s ease;
+      z-index: 4;
+    }
+
+    .radar-dot.active {
+      opacity: 1;
+      transform: scale(1.5);
+      box-shadow: 0 0 16px rgba(0,255,170,0.8);
+      background: #b8ffe8;
+    }
+
+    .radar-infos {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .radar-card {
+      background: rgba(4, 10, 14, 0.82);
+      border: 1px solid rgba(0,255,170,0.14);
+      border-radius: 12px;
+      padding: 10px;
+      min-height: 54px;
+    }
+
+    .radar-card .label {
+      color: #6f998d;
+      font-size: 11px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      letter-spacing: 0.8px;
+    }
+
+    .radar-card .value {
+      color: #d8ffe8;
+      font-size: 13px;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    .radar-card .value.green { color: #39ff14; }
+    .radar-card .value.blue { color: #4da6ff; }
+    .radar-card .value.orange { color: #ffb347; }
+    .radar-card .value.purple { color: #c084ff; }
+
+    .radar-legend {
+      margin-top: 10px;
+      text-align: center;
+      color: #7ea194;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    @keyframes radarSpin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 1200px) {
+      .radar-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .mode-tabs {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="grid">
+    <div class="box">
+      <div class="inner">
+        <h3>Football Tracker V4</h3>
+
+        <div class="mode-tabs">
+          <button class="mode-btn active" data-mode="player">Recherche joueur</button>
+          <button class="mode-btn" data-mode="club">Joueurs d'un club</button>
+          <button class="mode-btn" data-mode="national">Équipe nationale</button>
+        </div>
+
+        <div id="panel-player" class="panel active">
+          <div class="row">
+            <input id="playerInput" type="text" placeholder="Nom du joueur..." />
+            <button id="searchPlayerBtn">TRACK</button>
+          </div>
+
+          <div class="quick-targets">
+            <button class="quick-chip" data-player="Lionel Messi">Messi</button>
+            <button class="quick-chip" data-player="Cristiano Ronaldo">Ronaldo</button>
+            <button class="quick-chip" data-player="Kylian Mbappe">Mbappé</button>
+            <button class="quick-chip" data-player="Mohamed Salah">Salah</button>
+          </div>
+        </div>
+
+        <div id="panel-club" class="panel">
+          <div class="row wrap">
+            <select id="clubCountrySelect">
+              <option value="">Pays</option>
+            </select>
+            <input id="seasonInput" type="number" min="2022" max="2024" step="1" />
+          </div>
+
+          <div class="row wrap">
+            <select id="leagueSelect" disabled>
+              <option value="">Championnat</option>
+            </select>
+            <select id="clubSelect" disabled>
+              <option value="">Club</option>
+            </select>
+          </div>
+
+          <div class="row">
+            <button id="loadClubSquadBtn" disabled>Charger l'effectif</button>
+          </div>
+        </div>
+
+        <div id="panel-national" class="panel">
+          <div class="row wrap">
+            <select id="nationalCountrySelect">
+              <option value="">Pays</option>
+            </select>
+            <select id="nationalTeamSelect" disabled>
+              <option value="">Sélection nationale</option>
+            </select>
+          </div>
+
+          <div class="row">
+            <button id="loadNationalSquadBtn" disabled>Charger les joueurs</button>
+          </div>
+        </div>
+
+        <div class="status" id="status">Prêt.</div>
+
+        <div class="help">
+          Flow club: pays → championnats → clubs → effectif.<br>
+          Flow national: pays → sélections → joueurs.<br>
+          Clic sur un joueur = profil + pays d’origine + carrière + map.
+        </div>
+
+        <div class="player-top">
+          <img id="playerPhoto" class="player-photo" alt="" src="" />
+          <div class="player-main">
+            <div class="player-name" id="playerName">Aucun joueur chargé</div>
+            <div class="player-sub" id="playerSub">Choisis un mode de recherche pour lancer le tracker.</div>
+          </div>
+        </div>
+
+        <div class="intel-grid">
+          <div class="intel-card">
+            <div class="intel-label">Nationalité</div>
+            <div class="intel-value orange" id="statNationality">--</div>
+          </div>
+
+          <div class="intel-card">
+            <div class="intel-label">Origine</div>
+            <div class="intel-value cyan" id="statBirthPlace">--</div>
+          </div>
+
+          <div class="intel-card">
+            <div class="intel-label">Âge</div>
+            <div class="intel-value green" id="statAge">--</div>
+          </div>
+
+          <div class="intel-card">
+            <div class="intel-label">Poste</div>
+            <div class="intel-value purple" id="statPosition">--</div>
+          </div>
+
+          <div class="intel-card">
+            <div class="intel-label">Taille</div>
+            <div class="intel-value blue" id="statHeight">--</div>
+          </div>
+
+          <div class="intel-card">
+            <div class="intel-label">Poids</div>
+            <div class="intel-value red" id="statWeight">--</div>
+          </div>
+        </div>
+
+        <div class="summary-box" id="summaryBox">
+          <strong>Résumé:</strong><br>
+          En attente d’une recherche joueur...
+        </div>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="map-title">PLAYER GEO MAP</div>
+      <div class="map-badge" id="mapBadge">0 pays</div>
+      <div id="map"></div>
+    </div>
+
+    <div class="box">
+      <div class="inner">
+        <div class="section-title" id="listTitle">Sélection / carrière</div>
+        <div class="stats-scroll">
+          <div class="stat-list" id="careerList">
+            <div class="empty-state">Aucune donnée pour l’instant.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="inner">
+        <div class="section-title">Player Intelligence + Radar</div>
+
+        <div class="intel-grid">
+          <div class="intel-card">
+            <div class="intel-label">Clubs détectés</div>
+            <div class="intel-value green" id="statClubsCount">--</div>
+          </div>
+
+          <div class="intel-card">
+            <div class="intel-label">Pays joués</div>
+            <div class="intel-value orange" id="statCountriesPlayed">--</div>
+          </div>
+
+          <div class="intel-card full">
+            <div class="intel-label">Parcours probable</div>
+            <div class="intel-value" id="statRoute">--</div>
+          </div>
+        </div>
+
+        <div class="radar-layout" style="margin-top: 12px;">
+          <div class="radar-box">
+            <div class="radar-title">Career Radar V4</div>
+
+            <div class="radar-shell" id="radarShell">
+              <div class="radar-sweep"></div>
+              <div class="radar-ring"></div>
+              <div class="radar-cross-x"></div>
+              <div class="radar-cross-y"></div>
+              <div class="radar-center"></div>
+            </div>
+
+            <div class="radar-legend">
+              Pays / clubs / trajectoire
+            </div>
+          </div>
+
+          <div class="radar-infos">
+            <div class="radar-card">
+              <div class="label">Statut radar</div>
+              <div class="value green" id="radarStatus">En attente</div>
+            </div>
+
+            <div class="radar-card">
+              <div class="label">Point actif</div>
+              <div class="value blue" id="radarCurrentNode">--</div>
+            </div>
+
+            <div class="radar-card">
+              <div class="label">Nombre de points</div>
+              <div class="value orange" id="radarNodeCount">0</div>
+            </div>
+
+            <div class="radar-card">
+              <div class="label">Lecture radar</div>
+              <div class="value purple" id="radarInterpretation">Aucune activité</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-box" id="summaryBox2" style="margin-top: 12px;">
+          <strong>Lecture carrière:</strong><br>
+          Aucune donnée joueur pour l’instant.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const API_KEY = "4efb4d1cc5a49fb48e9cc5f0938251be";
+    const API_BASE = "https://v3.football.api-sports.io";
+
+    // PATCH: plan free bloqué après 2024
+    const CURRENT_SEASON = 2024;
+
+    const map = L.map('map', {
+      zoomControl: true,
+      attributionControl: true
+    }).setView([20, 10], 2);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd',
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap &copy; CARTO'
+    }).addTo(map);
+
+    const modeButtons = document.querySelectorAll(".mode-btn");
+    const panels = {
+      player: document.getElementById("panel-player"),
+      club: document.getElementById("panel-club"),
+      national: document.getElementById("panel-national")
+    };
+
+    const playerInput = document.getElementById("playerInput");
+    const searchPlayerBtn = document.getElementById("searchPlayerBtn");
+
+    const clubCountrySelect = document.getElementById("clubCountrySelect");
+    const leagueSelect = document.getElementById("leagueSelect");
+    const clubSelect = document.getElementById("clubSelect");
+    const seasonInput = document.getElementById("seasonInput");
+    const loadClubSquadBtn = document.getElementById("loadClubSquadBtn");
+
+    const nationalCountrySelect = document.getElementById("nationalCountrySelect");
+    const nationalTeamSelect = document.getElementById("nationalTeamSelect");
+    const loadNationalSquadBtn = document.getElementById("loadNationalSquadBtn");
+
+    const statusEl = document.getElementById("status");
+    const quickChips = document.querySelectorAll(".quick-chip");
+
+    const playerPhoto = document.getElementById("playerPhoto");
+    const playerName = document.getElementById("playerName");
+    const playerSub = document.getElementById("playerSub");
+
+    const statNationality = document.getElementById("statNationality");
+    const statBirthPlace = document.getElementById("statBirthPlace");
+    const statAge = document.getElementById("statAge");
+    const statPosition = document.getElementById("statPosition");
+    const statHeight = document.getElementById("statHeight");
+    const statWeight = document.getElementById("statWeight");
+
+    const statClubsCount = document.getElementById("statClubsCount");
+    const statCountriesPlayed = document.getElementById("statCountriesPlayed");
+    const statRoute = document.getElementById("statRoute");
+
+    const summaryBox = document.getElementById("summaryBox");
+    const summaryBox2 = document.getElementById("summaryBox2");
+    const careerList = document.getElementById("careerList");
+    const listTitle = document.getElementById("listTitle");
+    const mapBadge = document.getElementById("mapBadge");
+
+    const radarShell = document.getElementById("radarShell");
+    const radarStatus = document.getElementById("radarStatus");
+    const radarCurrentNode = document.getElementById("radarCurrentNode");
+    const radarNodeCount = document.getElementById("radarNodeCount");
+    const radarInterpretation = document.getElementById("radarInterpretation");
+
+    let mapMarkers = [];
+    let mapLines = [];
+    let radarDots = [];
+    let countriesGeoJson = null;
+    let countriesLayer = null;
+
+    const countryNameAliases = {
+      "USA": "United States of America",
+      "United States": "United States of America",
+      "England": "United Kingdom",
+      "Scotland": "United Kingdom",
+      "Wales": "United Kingdom",
+      "Korea, Republic of": "South Korea",
+      "Korea Republic": "South Korea",
+      "Korea, Democratic People's Republic of": "North Korea",
+      "Czech Republic": "Czechia",
+      "Ivory Coast": "Côte d'Ivoire",
+      "Bosnia": "Bosnia and Herzegovina",
+      "DR Congo": "Democratic Republic of the Congo",
+      "Congo DR": "Democratic Republic of the Congo",
+      "UAE": "United Arab Emirates"
+    };
+
+    function setMode(mode) {
+      modeButtons.forEach(btn => btn.classList.toggle("active", btn.dataset.mode === mode));
+      Object.entries(panels).forEach(([key, el]) => {
+        el.classList.toggle("active", key === mode);
+      });
+
+      statusEl.textContent =
+        mode === "player" ? "Mode recherche joueur" :
+        mode === "club" ? "Mode effectif club" :
+        "Mode équipe nationale";
+    }
+
+    modeButtons.forEach(btn => {
+      btn.addEventListener("click", () => setMode(btn.dataset.mode));
+    });
+
+    function unique(arr) {
+      return [...new Set(arr.filter(Boolean))];
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? "").replace(/[&<>"']/g, m => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      })[m]);
+    }
+
+    function normalizeCountryName(name) {
+      if (!name) return null;
+      const cleaned = String(name).trim();
+      return countryNameAliases[cleaned] || cleaned;
+    }
+
+    function get(obj, paths, fallback = null) {
+      for (const path of paths) {
+        const parts = path.split(".");
+        let value = obj;
+        let ok = true;
+        for (const part of parts) {
+          if (value && Object.prototype.hasOwnProperty.call(value, part)) {
+            value = value[part];
+          } else {
+            ok = false;
+            break;
+          }
+        }
+        if (ok && value !== undefined && value !== null && value !== "") return value;
+      }
+      return fallback;
+    }
+
+    function extractResponseArray(data) {
+      if (!data) return [];
+      if (Array.isArray(data.response)) return data.response;
+      if (Array.isArray(data.results)) return data.results;
+      if (Array.isArray(data.data)) return data.data;
+      return [];
+    }
+
+    async function apiFetch(path) {
+      const response = await fetch(`${API_BASE}${path}`, {
+        headers: {
+          "x-apisports-key": API_KEY
+        }
+      });
+
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error("Réponse API illisible.");
+      }
+
+      if (!response.ok) {
+        throw new Error(`API error ${response.status}`);
+      }
+
+      // PATCH: capture erreurs API genre plan free / season
+      if (data.errors && Object.keys(data.errors).length > 0) {
+        const firstError = Object.values(data.errors)[0];
+        throw new Error(typeof firstError === "string" ? firstError : "Erreur API");
+      }
+
+      return data;
+    }
+
+    function fillSelect(select, items, valueKey, labelFn, firstLabel) {
+      select.innerHTML = `<option value="">${firstLabel}</option>`;
+      items.forEach(item => {
+        const opt = document.createElement("option");
+        opt.value = item[valueKey];
+        opt.textContent = labelFn(item);
+        select.appendChild(opt);
+      });
+    }
+
+    async function loadCountriesForSelectors() {
+      try {
+        const data = await apiFetch("/countries");
+        const countries = extractResponseArray(data)
+          .map(item => ({ name: item.name || item.country || item }))
+          .filter(c => c.name)
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        fillSelect(clubCountrySelect, countries, "name", c => c.name, "Pays");
+        fillSelect(nationalCountrySelect, countries, "name", c => c.name, "Pays");
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = `Erreur pays: ${err.message}`;
+      }
+    }
+
+    function normalizeProfileItem(raw) {
+      const root = raw?.player || raw?.profile || raw || {};
+      const firstname = get(root, ["firstname", "first_name"], "");
+      const lastname = get(root, ["lastname", "last_name"], "");
+      const fullName = get(root, ["name", "player_name"], `${firstname} ${lastname}`.trim()) || "Joueur";
+
+      return {
+        id: get(root, ["id", "player_id"], get(raw, ["player.id", "id"], null)),
+        name: fullName,
+        firstname,
+        lastname,
+        photo: get(root, ["photo", "image", "photo_url"], ""),
+        age: get(root, ["age"], get(raw, ["statistics.0.player.age"], null)),
+        nationality: get(root, ["nationality", "country"], get(raw, ["statistics.0.player.nationality"], null)),
+        position: get(root, ["position"], get(raw, ["statistics.0.games.position", "statistics.0.position"], null)),
+        height: get(root, ["height"], null),
+        weight: get(root, ["weight"], null),
+        birth: {
+          date: get(root, ["birth.date"], get(raw, ["birth.date"], null)),
+          place: get(root, ["birth.place"], get(raw, ["birth.place"], null)),
+          country: normalizeCountryName(get(root, ["birth.country"], get(raw, ["birth.country"], null)))
+        }
+      };
+    }
+
+    function normalizeTeamItem(raw) {
+      const team = raw?.team || raw || {};
+      let seasons = [];
+
+      if (Array.isArray(raw?.seasons)) seasons = raw.seasons;
+      else if (raw?.season) seasons = [raw.season];
+      else if (Array.isArray(team?.seasons)) seasons = team.seasons;
+
+      seasons = seasons.map(s => String(s)).filter(Boolean).sort();
+
+      return {
+        id: get(team, ["id", "team_id"], get(raw, ["team.id", "id"], null)),
+        name: get(team, ["name"], get(raw, ["name"], "Club")),
+        logo: get(team, ["logo"], get(raw, ["logo"], "")),
+        country: normalizeCountryName(get(team, ["country"], get(raw, ["country"], null))),
+        seasons,
+        national: !!get(team, ["national"], get(raw, ["national"], false))
+      };
+    }
+
+    function normalizeLeagueItem(raw) {
+      return {
+        id: get(raw, ["league.id", "id"], null),
+        name: get(raw, ["league.name", "name"], "League"),
+        type: get(raw, ["league.type", "type"], ""),
+        country: get(raw, ["country.name", "country"], ""),
+        logo: get(raw, ["league.logo"], "")
+      };
+    }
+
+    function normalizeSquadPlayerItem(raw) {
+      const root = raw?.player || raw || {};
+      return {
+        id: get(root, ["id", "player_id"], null),
+        name: get(root, ["name"], `${get(root, ["firstname"], "")} ${get(root, ["lastname"], "")}`.trim() || "Joueur"),
+        age: get(root, ["age"], null),
+        number: get(root, ["number"], null),
+        position: get(root, ["position"], null),
+        photo: get(root, ["photo"], ""),
+        nationality: get(root, ["nationality"], null)
+      };
+    }
+
+    function dedupeLeagues(items) {
+      const map = new Map();
+      items.map(normalizeLeagueItem).forEach(item => {
+        if (!item.id) return;
+        if (!map.has(String(item.id))) map.set(String(item.id), item);
+      });
+      return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    function dedupeTeams(items) {
+      const map = new Map();
+      items.map(normalizeTeamItem).forEach(item => {
+        const key = `${item.id || item.name}__${item.country || ""}`;
+        if (!map.has(key)) map.set(key, item);
+      });
+      return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    function chooseBestProfile(items, searchedName) {
+      if (!items.length) return null;
+      const normalized = items.map(normalizeProfileItem);
+      const q = searchedName.trim().toLowerCase();
+
+      const exact = normalized.find(p => (p.name || "").toLowerCase() === q);
+      if (exact) return exact;
+
+      const starts = normalized.find(p => (p.name || "").toLowerCase().startsWith(q));
+      if (starts) return starts;
+
+      return normalized[0];
+    }
+
+    function resetMap() {
+      mapMarkers.forEach(m => map.removeLayer(m));
+      mapLines.forEach(l => map.removeLayer(l));
+      mapMarkers = [];
+      mapLines = [];
+      if (countriesLayer) {
+        map.removeLayer(countriesLayer);
+        countriesLayer = null;
+      }
+      mapBadge.textContent = "0 pays";
+      map.setView([20, 10], 2);
+    }
+
+    function resetRadar() {
+      radarDots.forEach(dot => dot.remove());
+      radarDots = [];
+      radarStatus.textContent = "En attente";
+      radarCurrentNode.textContent = "--";
+      radarNodeCount.textContent = "0";
+      radarInterpretation.textContent = "Aucune activité";
+    }
+
+    function resetPlayerDetails() {
+      playerPhoto.src = "";
+      playerPhoto.style.visibility = "hidden";
+      playerName.textContent = "Aucun joueur chargé";
+      playerSub.textContent = "Choisis un mode de recherche pour lancer le tracker.";
+
+      statNationality.textContent = "--";
+      statBirthPlace.textContent = "--";
+      statAge.textContent = "--";
+      statPosition.textContent = "--";
+      statHeight.textContent = "--";
+      statWeight.textContent = "--";
+      statClubsCount.textContent = "--";
+      statCountriesPlayed.textContent = "--";
+      statRoute.textContent = "--";
+
+      summaryBox.innerHTML = "<strong>Résumé:</strong><br>En attente d’une recherche joueur...";
+      summaryBox2.innerHTML = "<strong>Lecture carrière:</strong><br>Aucune donnée joueur pour l’instant.";
+
+      resetMap();
+      resetRadar();
+    }
+
+    function renderPlayerProfile(profile) {
+      playerName.textContent = profile.name || "Joueur";
+      playerSub.textContent = [
+        profile.birth?.date ? `Né le ${profile.birth.date}` : null,
+        profile.birth?.country || null,
+        profile.nationality || null
+      ].filter(Boolean).join(" • ");
+
+      if (profile.photo) {
+        playerPhoto.src = profile.photo;
+        playerPhoto.style.visibility = "visible";
+      } else {
+        playerPhoto.style.visibility = "hidden";
+      }
+
+      statNationality.textContent = profile.nationality || "--";
+      statBirthPlace.textContent = [profile.birth?.place, profile.birth?.country].filter(Boolean).join(", ") || "--";
+      statAge.textContent = profile.age || "--";
+      statPosition.textContent = profile.position || "--";
+      statHeight.textContent = profile.height || "--";
+      statWeight.textContent = profile.weight || "--";
+    }
+
+    function renderCareerList(teams) {
+      listTitle.textContent = "Career Clubs / Timeline";
+
+      if (!teams.length) {
+        careerList.innerHTML = '<div class="empty-state">Aucun club trouvé pour ce joueur.</div>';
+        return;
+      }
+
+      careerList.innerHTML = teams.map(item => {
+        const seasons = item.seasons?.length ? item.seasons.join(", ") : "--";
+        const country = item.country || "Pays inconnu";
+
+        return `
+          <div class="club-row">
+            <img class="club-logo" src="${escapeHtml(item.logo || "")}" alt="">
+            <div class="club-main">
+              <div class="club-name">${escapeHtml(item.name || "Club")}</div>
+              <div class="club-sub">${escapeHtml(country)}</div>
+            </div>
+            <div class="club-season">${escapeHtml(seasons)}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderNoResult(query) {
+      listTitle.textContent = "Résultats";
+      careerList.innerHTML = `
+        <div class="empty-state">
+          Aucun résultat pour <b>${escapeHtml(query)}</b><br><br>
+          Essaie: nom complet, sans accent, prénom + nom
+        </div>
+      `;
+    }
+
+    function renderPlayerChoices(players) {
+      listTitle.textContent = "Choisis le bon joueur";
+
+      careerList.innerHTML = players.map(p => `
+        <div class="choice-row">
+          <img class="choice-avatar" src="${escapeHtml(p.photo || "")}" alt="">
+          <div class="choice-main">
+            <div class="choice-name">${escapeHtml(p.name)}</div>
+            <div class="choice-sub">
+              ${escapeHtml(p.nationality || "?")} • ${escapeHtml(p.age || "?")} ans • ${escapeHtml(p.position || "?")}
+            </div>
+          </div>
+          <button class="choice-action" data-player-id="${escapeHtml(p.id)}">Choisir</button>
+        </div>
+      `).join("");
+
+      document.querySelectorAll("[data-player-id]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const player = players.find(p => String(p.id) === String(btn.dataset.playerId));
+          if (player) await loadSelectedPlayer(player);
+        });
+      });
+    }
+
+    function renderSquadChoices(players, title) {
+      listTitle.textContent = title;
+
+      if (!players.length) {
+        careerList.innerHTML = '<div class="empty-state">Aucun joueur trouvé dans cet effectif.</div>';
+        return;
+      }
+
+      careerList.innerHTML = players.map(p => `
+        <div class="choice-row">
+          <img class="choice-avatar" src="${escapeHtml(p.photo || "")}" alt="">
+          <div class="choice-main">
+            <div class="choice-name">${escapeHtml(p.name)}</div>
+            <div class="choice-sub">
+              ${escapeHtml(p.nationality || "?")} • N° ${escapeHtml(p.number || "?")} • ${escapeHtml(p.position || "?")}
+            </div>
+          </div>
+          <button class="choice-action" data-squad-player-id="${escapeHtml(p.id)}">Ouvrir</button>
+        </div>
+      `).join("");
+
+      document.querySelectorAll("[data-squad-player-id]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const player = players.find(p => String(p.id) === String(btn.dataset.squadPlayerId));
+          if (player?.id) await loadPlayerById(player.id);
+        });
+      });
+    }
+
+    function buildRoute(countries) {
+      if (!countries.length) return "--";
+      if (countries.length === 1) return countries[0];
+      return countries.join(" → ");
+    }
+
+    function renderSummaries(profile, teams, countriesPlayed) {
+      const clubsCount = unique(teams.map(t => t.id || t.name)).length;
+      statClubsCount.textContent = String(clubsCount);
+      statCountriesPlayed.textContent = String(countriesPlayed.length);
+      statRoute.textContent = buildRoute(countriesPlayed);
+
+      summaryBox.innerHTML = `
+        <strong>Résumé:</strong><br>
+        ${escapeHtml(profile.name || "Joueur")} est lié à <strong>${escapeHtml(profile.birth?.country || profile.nationality || "inconnu")}</strong>
+        et a joué dans <strong>${clubsCount}</strong> club(s) répartis sur
+        <strong>${countriesPlayed.length}</strong> pays.
+      `;
+
+      summaryBox2.innerHTML = `
+        <strong>Lecture carrière:</strong><br>
+        Nationalité: <strong>${escapeHtml(profile.nationality || "--")}</strong>.<br>
+        Pays d’origine: <strong>${escapeHtml(profile.birth?.country || "--")}</strong>.<br>
+        Trajectoire probable: <strong>${escapeHtml(buildRoute(countriesPlayed))}</strong>.<br>
+        Dernière lecture: <strong>${escapeHtml(profile.position || "poste inconnu")}</strong>,
+        ${profile.age ? `<strong>${escapeHtml(profile.age)}</strong> ans` : "âge inconnu"}.
+      `;
+    }
+
+    async function ensureCountriesGeoJson() {
+      if (countriesGeoJson) return countriesGeoJson;
+      const res = await fetch("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson");
+      countriesGeoJson = await res.json();
+      return countriesGeoJson;
+    }
+
+    function polygonCenter(latlngs) {
+      let flat = [];
+
+      function walk(arr) {
+        for (const item of arr) {
+          if (Array.isArray(item) && typeof item[0] === "number" && typeof item[1] === "number") {
+            flat.push(item);
+          } else if (Array.isArray(item)) {
+            walk(item);
+          }
+        }
+      }
+
+      if (!Array.isArray(latlngs)) return null;
+      walk(latlngs);
+      if (!flat.length) return null;
+
+      let sumLat = 0;
+      let sumLng = 0;
+      flat.forEach(([lng, lat]) => {
+        sumLat += lat;
+        sumLng += lng;
+      });
+
+      return [sumLat / flat.length, sumLng / flat.length];
+    }
+
+    function buildRadar(points) {
+      resetRadar();
+
+      const dotCount = Math.min(points.length, 12);
+      radarNodeCount.textContent = String(dotCount);
+
+      if (!dotCount) {
+        radarStatus.textContent = "Aucune activité";
+        radarInterpretation.textContent = "Aucun pays exploitable";
+        return;
+      }
+
+      radarStatus.textContent = "Radar actif";
+      radarInterpretation.textContent =
+        dotCount <= 2 ? "Parcours court ou concentré" :
+        dotCount <= 5 ? "Parcours international modéré" :
+        "Parcours international étendu";
+
+      for (let i = 0; i < dotCount; i++) {
+        const angle = (i / dotCount) * Math.PI * 2;
+        const radius = 22 + (i % 4) * 16 + Math.random() * 6;
+        const x = 80 + Math.cos(angle) * radius;
+        const y = 80 + Math.sin(angle) * radius;
+
+        const dot = document.createElement("div");
+        dot.className = "radar-dot";
+        dot.style.left = `${x}px`;
+        dot.style.top = `${y}px`;
+
+        radarShell.appendChild(dot);
+        radarDots.push(dot);
+      }
+    }
+
+    async function pulseRadar(points) {
+      if (!points.length || !radarDots.length) return;
+
+      for (let i = 0; i < radarDots.length; i++) {
+        radarDots.forEach(d => d.classList.remove("active"));
+        radarDots[i].classList.add("active");
+        radarCurrentNode.textContent = points[i].label;
+        await new Promise(resolve => setTimeout(resolve, 350));
+      }
+
+      radarDots.forEach(d => d.classList.remove("active"));
+      radarStatus.textContent = "Scan terminé";
+    }
+
+    async function renderMap(profile, teams) {
+      resetMap();
+      await ensureCountriesGeoJson();
+
+      const originCountries = unique([
+        normalizeCountryName(profile.birth?.country),
+        normalizeCountryName(profile.nationality)
+      ]);
+
+      const playedCountries = unique(teams.map(t => normalizeCountryName(t.country)));
+      const allCountriesOrdered = unique([...originCountries, ...playedCountries]).filter(Boolean);
+
+      const selectedFeatures = countriesGeoJson.features.filter(feature => {
+        const name = normalizeCountryName(feature.properties.ADMIN || feature.properties.name);
+        return allCountriesOrdered.includes(name);
+      });
+
+      if (!selectedFeatures.length) {
+        mapBadge.textContent = `${allCountriesOrdered.length} pays`;
+        buildRadar([]);
+        return allCountriesOrdered;
+      }
+
+      const originSet = new Set(originCountries);
+
+      countriesLayer = L.geoJSON(
+        {
+          type: "FeatureCollection",
+          features: selectedFeatures
+        },
+        {
+          style: feature => {
+            const countryName = normalizeCountryName(feature.properties.ADMIN || feature.properties.name);
+            const isOrigin = originSet.has(countryName);
+            return {
+              color: isOrigin ? "#ffb347" : "#00ffaa",
+              weight: 3,
+              opacity: 1,
+              fillColor: isOrigin ? "#ffb347" : "#00ffaa",
+              fillOpacity: 0.12
+            };
+          },
+          onEachFeature: (feature, layer) => {
+            const countryName = normalizeCountryName(feature.properties.ADMIN || feature.properties.name);
+            const isOrigin = originSet.has(countryName);
+            layer.bindPopup(`<b>${escapeHtml(countryName)}</b><br>${isOrigin ? "Origine / nationalité" : "Pays joué"}`);
+          }
+        }
+      ).addTo(map);
+
+      const points = [];
+      const pointMap = new Map();
+
+      selectedFeatures.forEach(feature => {
+        const countryName = normalizeCountryName(feature.properties.ADMIN || feature.properties.name);
+        const center = polygonCenter(feature.geometry.coordinates);
+        if (!center) return;
+
+        pointMap.set(countryName, center);
+
+        const marker = L.circleMarker(center, {
+          radius: 7,
+          color: originSet.has(countryName) ? "#ffb347" : "#00ffaa",
+          fillColor: originSet.has(countryName) ? "#ffb347" : "#00ffaa",
+          fillOpacity: 0.75
+        }).addTo(map);
+
+        marker.bindPopup(`<b>${escapeHtml(countryName)}</b><br>${originSet.has(countryName) ? "Origine / nationalité" : "Pays joué"}`);
+        mapMarkers.push(marker);
+      });
+
+      const routeCountries = unique([...originCountries, ...playedCountries]).filter(c => pointMap.has(c));
+
+      routeCountries.forEach(country => {
+        points.push({
+          label: country,
+          latlng: pointMap.get(country)
+        });
+      });
+
+      for (let i = 1; i < points.length; i++) {
+        const line = L.polyline([points[i - 1].latlng, points[i].latlng], {
+          color: "#00ffaa",
+          weight: 2,
+          dashArray: "6,8",
+          opacity: 0.85
+        }).addTo(map);
+        mapLines.push(line);
+      }
+
+      map.fitBounds(countriesLayer.getBounds(), { padding: [30, 30] });
+      mapBadge.textContent = `${allCountriesOrdered.length} pays`;
+
+      buildRadar(points);
+      await pulseRadar(points);
+
+      return allCountriesOrdered;
+    }
+
+    async function searchPlayerProfiles(name) {
+      const data = await apiFetch(`/players/profiles?search=${encodeURIComponent(name)}`);
+      return extractResponseArray(data);
+    }
+
+    async function fetchPlayerProfileById(playerId) {
+      const data = await apiFetch(`/players/profiles?player=${encodeURIComponent(playerId)}`);
+      return extractResponseArray(data);
+    }
+
+    async function fetchPlayerTeams(playerId) {
+      const data = await apiFetch(`/players/teams?player=${encodeURIComponent(playerId)}`);
+      return extractResponseArray(data);
+    }
+
+    async function fetchLeaguesByCountry(country, season) {
+      const data = await apiFetch(`/leagues?country=${encodeURIComponent(country)}&season=${encodeURIComponent(season)}`);
+      return dedupeLeagues(extractResponseArray(data));
+    }
+
+    async function fetchTeamsByLeague(leagueId, season) {
+      const data = await apiFetch(`/teams?league=${encodeURIComponent(leagueId)}&season=${encodeURIComponent(season)}`);
+      return dedupeTeams(extractResponseArray(data));
+    }
+
+    async function fetchNationalTeamsByCountry(country) {
+      // PATCH: tentative 1
+      const data = await apiFetch(`/teams?country=${encodeURIComponent(country)}&national=true`);
+      let teams = dedupeTeams(extractResponseArray(data));
+
+      // PATCH: fallback si national=true renvoie vide
+      if (!teams.length) {
+        const fallback = await apiFetch(`/teams?country=${encodeURIComponent(country)}`);
+        teams = dedupeTeams(extractResponseArray(fallback)).filter(t =>
+          t.national || /u-?\d+|women|olympic|selection|national/i.test(t.name || "")
+        );
+      }
+
+      return teams;
+    }
+
+    async function fetchSquadByTeam(teamId) {
+      const data = await apiFetch(`/players/squads?team=${encodeURIComponent(teamId)}`);
+      const response = extractResponseArray(data);
+
+      let players = [];
+      response.forEach(item => {
+        if (Array.isArray(item.players)) {
+          item.players.forEach(p => players.push(normalizeSquadPlayerItem(p)));
+        } else if (Array.isArray(item.squad)) {
+          item.squad.forEach(p => players.push(normalizeSquadPlayerItem(p)));
+        } else if (item.player) {
+          players.push(normalizeSquadPlayerItem(item.player));
+        }
+      });
+
+      return players
+        .filter(p => p.id || p.name)
+        .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    }
+
+    async function loadPlayerById(playerId) {
+      statusEl.textContent = "Chargement du joueur...";
+      resetPlayerDetails();
+
+      let profile = null;
+
+      try {
+        const byIdRaw = await fetchPlayerProfileById(playerId);
+        if (byIdRaw.length) {
+          profile = normalizeProfileItem(byIdRaw[0]);
+        }
+      } catch (err) {
+        console.error("profile by id error", err);
+      }
+
+      if (!profile) {
+        profile = {
+          id: playerId,
+          name: `Player ${playerId}`,
+          photo: "",
+          nationality: "",
+          position: "",
+          age: null,
+          height: null,
+          weight: null,
+          birth: {}
+        };
+      }
+
+      await loadSelectedPlayer(profile);
+    }
+
+    async function loadSelectedPlayer(profile) {
+      statusEl.textContent = `Chargement ${profile.name}...`;
+      resetPlayerDetails();
+      renderPlayerProfile(profile);
+
+      const teamsRaw = await fetchPlayerTeams(profile.id);
+      const teams = dedupeTeams(teamsRaw);
+
+      renderCareerList(teams);
+      const countriesPlayed = await renderMap(profile, teams);
+      renderSummaries(profile, teams, countriesPlayed);
+
+      statusEl.textContent = `Joueur chargé: ${profile.name}`;
+    }
+
+    async function runPlayerSearch() {
+      const query = playerInput.value.trim();
+      if (!query) {
+        statusEl.textContent = "Entre un nom de joueur.";
+        return;
+      }
+
+      statusEl.textContent = "Recherche joueur...";
+      resetPlayerDetails();
+
+      try {
+        const profilesRaw = await searchPlayerProfiles(query);
+        const profiles = profilesRaw.map(normalizeProfileItem).filter(p => p.id || p.name);
+
+        if (!profiles.length) {
+          statusEl.textContent = "Aucun joueur trouvé.";
+          renderNoResult(query);
+          return;
+        }
+
+        if (profiles.length === 1) {
+          await loadSelectedPlayer(profiles[0]);
+          return;
+        }
+
+        statusEl.textContent = `${profiles.length} joueurs trouvés`;
+        renderPlayerChoices(profiles);
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = `Erreur: ${err.message}`;
+        renderNoResult(query);
+      }
+    }
+
+    async function handleClubCountryChange() {
+      leagueSelect.disabled = true;
+      clubSelect.disabled = true;
+      loadClubSquadBtn.disabled = true;
+
+      fillSelect(leagueSelect, [], "id", () => "", "Championnat");
+      fillSelect(clubSelect, [], "id", () => "", "Club");
+
+      const country = clubCountrySelect.value;
+      const season = seasonInput.value || CURRENT_SEASON;
+      if (!country) return;
+
+      statusEl.textContent = `Chargement des championnats pour ${country}...`;
+
+      try {
+        const leagues = await fetchLeaguesByCountry(country, season);
+
+        fillSelect(
+          leagueSelect,
+          leagues,
+          "id",
+          l => `${l.name}${l.type ? ` • ${l.type}` : ""}`,
+          "Championnat"
+        );
+
+        leagueSelect.disabled = false;
+        statusEl.textContent = `${leagues.length} championnat(s) chargé(s) pour ${country}`;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = `Erreur championnats: ${err.message}`;
+      }
+    }
+
+    async function handleLeagueChange() {
+      clubSelect.disabled = true;
+      loadClubSquadBtn.disabled = true;
+      fillSelect(clubSelect, [], "id", () => "", "Club");
+
+      const leagueId = leagueSelect.value;
+      const season = seasonInput.value || CURRENT_SEASON;
+      if (!leagueId) return;
+
+      const leagueName = leagueSelect.options[leagueSelect.selectedIndex]?.textContent || "championnat";
+      statusEl.textContent = `Chargement des clubs pour ${leagueName}...`;
+
+      try {
+        const teams = await fetchTeamsByLeague(leagueId, season);
+
+        fillSelect(
+          clubSelect,
+          teams,
+          "id",
+          t => `${t.name}${t.country ? ` • ${t.country}` : ""}`,
+          "Club"
+        );
+
+        clubSelect.disabled = false;
+        statusEl.textContent = `${teams.length} club(s) chargé(s) pour ${leagueName}`;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = `Erreur clubs: ${err.message}`;
+      }
+    }
+
+    function handleClubChange() {
+      loadClubSquadBtn.disabled = !clubSelect.value;
+    }
+
+    async function runClubSquadSearch() {
+      const teamId = clubSelect.value;
+      const teamName = clubSelect.options[clubSelect.selectedIndex]?.textContent || "Club";
+
+      if (!teamId) {
+        statusEl.textContent = "Choisis un club.";
+        return;
+      }
+
+      statusEl.textContent = `Chargement de l'effectif ${teamName}...`;
+      resetPlayerDetails();
+
+      try {
+        const squad = await fetchSquadByTeam(teamId);
+        renderSquadChoices(squad, `Effectif club • ${teamName}`);
+        statusEl.textContent = `${squad.length} joueur(s) trouvé(s)`;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = `Erreur effectif club: ${err.message}`;
+      }
+    }
+
+    async function handleNationalCountryChange() {
+      nationalTeamSelect.disabled = true;
+      loadNationalSquadBtn.disabled = true;
+      fillSelect(nationalTeamSelect, [], "id", () => "", "Sélection nationale");
+
+      const country = nationalCountrySelect.value;
+      if (!country) return;
+
+      statusEl.textContent = `Chargement des sélections de ${country}...`;
+
+      try {
+        const teams = await fetchNationalTeamsByCountry(country);
+
+        fillSelect(
+          nationalTeamSelect,
+          teams,
+          "id",
+          t => `${t.name}${t.country ? ` • ${t.country}` : ""}`,
+          "Sélection nationale"
+        );
+
+        nationalTeamSelect.disabled = false;
+        statusEl.textContent = `${teams.length} sélection(s) chargée(s) pour ${country}`;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = `Erreur sélections: ${err.message}`;
+      }
+    }
+
+    function handleNationalTeamChange() {
+      loadNationalSquadBtn.disabled = !nationalTeamSelect.value;
+    }
+
+    async function runNationalSquadSearch() {
+      const teamId = nationalTeamSelect.value;
+      const teamName = nationalTeamSelect.options[nationalTeamSelect.selectedIndex]?.textContent || "Sélection";
+
+      if (!teamId) {
+        statusEl.textContent = "Choisis une sélection nationale.";
+        return;
+      }
+
+      statusEl.textContent = `Chargement de l'effectif ${teamName}...`;
+      resetPlayerDetails();
+
+      try {
+        const squad = await fetchSquadByTeam(teamId);
+        renderSquadChoices(squad, `Sélection nationale • ${teamName}`);
+        statusEl.textContent = `${squad.length} joueur(s) trouvé(s)`;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = `Erreur effectif national: ${err.message}`;
+      }
+    }
+
+    seasonInput.value = CURRENT_SEASON;
+
+    searchPlayerBtn.addEventListener("click", runPlayerSearch);
+    playerInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") runPlayerSearch();
+    });
+
+    quickChips.forEach(chip => {
+      chip.addEventListener("click", () => {
+        setMode("player");
+        playerInput.value = chip.dataset.player;
+        runPlayerSearch();
+      });
+    });
+
+    clubCountrySelect.addEventListener("change", handleClubCountryChange);
+    seasonInput.addEventListener("change", () => {
+      if (clubCountrySelect.value) handleClubCountryChange();
+    });
+    leagueSelect.addEventListener("change", handleLeagueChange);
+    clubSelect.addEventListener("change", handleClubChange);
+    loadClubSquadBtn.addEventListener("click", runClubSquadSearch);
+
+    nationalCountrySelect.addEventListener("change", handleNationalCountryChange);
+    nationalTeamSelect.addEventListener("change", handleNationalTeamChange);
+    loadNationalSquadBtn.addEventListener("click", runNationalSquadSearch);
+
+    loadCountriesForSelectors();
+    setMode("player");
+    resetPlayerDetails();
+  </script>
+</body>
+</html>
