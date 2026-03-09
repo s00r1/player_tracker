@@ -1,0 +1,11 @@
+{
+  "name": "player-tracker",
+  "version": "1.0.0",
+  "description": "Frontend + proxy backend sécurisé pour API-Football",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "license": "MIT"
+}
