@@ -566,6 +566,85 @@
       line-height: 1.4;
     }
 
+    .performance-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .perf-card {
+      border: 1px solid rgba(0,255,170,0.16);
+      border-radius: 10px;
+      background: rgba(5, 14, 18, 0.8);
+      padding: 10px;
+    }
+
+    .perf-label {
+      font-size: 10px;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: #7ca194;
+    }
+
+    .perf-value {
+      margin-top: 6px;
+      font-size: 18px;
+      color: #d7ffea;
+      font-weight: 700;
+    }
+
+    .league-chips {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .league-chip {
+      border: 1px solid rgba(0,255,170,0.2);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      color: #a9d6c4;
+      background: rgba(0,255,170,0.08);
+    }
+
+    .season-table {
+      margin-top: 10px;
+      border: 1px solid rgba(0,255,170,0.14);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .season-row {
+      display: grid;
+      grid-template-columns: 1.8fr repeat(5, minmax(0, 1fr));
+      gap: 6px;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(0,255,170,0.08);
+      font-size: 12px;
+      align-items: center;
+    }
+
+    .season-row:last-child {
+      border-bottom: none;
+    }
+
+    .season-row.head {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #88ad9f;
+      background: rgba(0,255,170,0.06);
+      font-weight: 600;
+    }
+
+    .season-row .comp {
+      color: #d6ffea;
+      font-weight: 600;
+    }
+
     @keyframes radarSpin {
       from { transform: rotate(0deg); }
       to   { transform: rotate(360deg); }
@@ -778,6 +857,11 @@
           </div>
         </div>
 
+        <div class="section-title" style="margin-top:14px;">Performance Hub</div>
+        <div class="performance-grid" id="advancedStatsGrid"></div>
+        <div class="league-chips" id="competitionChips"></div>
+        <div class="season-table" id="seasonStatsTable"></div>
+
         <div class="summary-box" id="summaryBox2" style="margin-top: 12px;">
           <strong>Lecture carrière:</strong><br>
           Aucune donnée joueur pour l’instant.
@@ -788,8 +872,7 @@
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    const API_KEY = "4efb4d1cc5a49fb48e9cc5f0938251be";
-    const API_BASE = "https://v3.football.api-sports.io";
+    const API_BASE = "/api";
 
     // PATCH: plan free bloqué après 2024
     const CURRENT_SEASON = 2024;
@@ -854,6 +937,9 @@
     const radarCurrentNode = document.getElementById("radarCurrentNode");
     const radarNodeCount = document.getElementById("radarNodeCount");
     const radarInterpretation = document.getElementById("radarInterpretation");
+    const advancedStatsGrid = document.getElementById("advancedStatsGrid");
+    const competitionChips = document.getElementById("competitionChips");
+    const seasonStatsTable = document.getElementById("seasonStatsTable");
 
     let mapMarkers = [];
     let mapLines = [];
@@ -941,11 +1027,7 @@
     }
 
     async function apiFetch(path) {
-      const response = await fetch(`${API_BASE}${path}`, {
-        headers: {
-          "x-apisports-key": API_KEY
-        }
-      });
+      const response = await fetch(`${API_BASE}${path}`);
 
       const text = await response.text();
       let data;
@@ -1134,6 +1216,9 @@
 
       summaryBox.innerHTML = "<strong>Résumé:</strong><br>En attente d’une recherche joueur...";
       summaryBox2.innerHTML = "<strong>Lecture carrière:</strong><br>Aucune donnée joueur pour l’instant.";
+      advancedStatsGrid.innerHTML = '<div class="empty-state">Stats avancées en attente.</div>';
+      competitionChips.innerHTML = "";
+      seasonStatsTable.innerHTML = "";
 
       resetMap();
       resetRadar();
@@ -1276,6 +1361,121 @@
         Trajectoire probable: <strong>${escapeHtml(buildRoute(countriesPlayed))}</strong>.<br>
         Dernière lecture: <strong>${escapeHtml(profile.position || "poste inconnu")}</strong>,
         ${profile.age ? `<strong>${escapeHtml(profile.age)}</strong> ans` : "âge inconnu"}.
+      `;
+    }
+
+    function toNumber(value) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function aggregatePlayerStats(rows) {
+      const totals = {
+        matchs: 0,
+        minutes: 0,
+        buts: 0,
+        assists: 0,
+        tirs: 0,
+        tirsCadres: 0,
+        passes: 0,
+        passesCle: 0,
+        dribbles: 0,
+        tacles: 0,
+        interceptions: 0,
+        duels: 0,
+        duelsGagnes: 0,
+        jaunes: 0,
+        rouges: 0
+      };
+
+      const perCompetition = [];
+      const competitions = new Set();
+
+      rows.forEach(row => {
+        const s = row.statistics || {};
+        const comp = `${row.league?.name || "Compétition"}${row.league?.country ? ` (${row.league.country})` : ""}`;
+        competitions.add(comp);
+
+        const item = {
+          comp,
+          saison: row.league?.season || "--",
+          matchs: toNumber(s.games?.appearences),
+          buts: toNumber(s.goals?.total),
+          assists: toNumber(s.goals?.assists),
+          minutes: toNumber(s.games?.minutes),
+          note: s.games?.rating || "--"
+        };
+        perCompetition.push(item);
+
+        totals.matchs += item.matchs;
+        totals.minutes += item.minutes;
+        totals.buts += item.buts;
+        totals.assists += item.assists;
+        totals.tirs += toNumber(s.shots?.total);
+        totals.tirsCadres += toNumber(s.shots?.on);
+        totals.passes += toNumber(s.passes?.total);
+        totals.passesCle += toNumber(s.passes?.key);
+        totals.dribbles += toNumber(s.dribbles?.success);
+        totals.tacles += toNumber(s.tackles?.total);
+        totals.interceptions += toNumber(s.tackles?.interceptions);
+        totals.duels += toNumber(s.duels?.total);
+        totals.duelsGagnes += toNumber(s.duels?.won);
+        totals.jaunes += toNumber(s.cards?.yellow);
+        totals.rouges += toNumber(s.cards?.red);
+      });
+
+      perCompetition.sort((a, b) => Number(b.saison) - Number(a.saison) || b.matchs - a.matchs);
+      return { totals, perCompetition: perCompetition.slice(0, 8), competitions: [...competitions] };
+    }
+
+    function renderAdvancedStats(stats) {
+      const cards = [
+        ["Matchs", stats.matchs],
+        ["Buts", stats.buts],
+        ["Passes D", stats.assists],
+        ["Minutes", stats.minutes],
+        ["Tirs / cadrés", `${stats.tirs} / ${stats.tirsCadres}`],
+        ["Passes / clés", `${stats.passes} / ${stats.passesCle}`],
+        ["Duels gagnés", `${stats.duelsGagnes} / ${stats.duels}`],
+        ["Tacles + inter.", `${stats.tacles} + ${stats.interceptions}`],
+        ["Dribbles réussis", stats.dribbles],
+        ["Cartons", `${stats.jaunes} 🟨 / ${stats.rouges} 🟥`]
+      ];
+
+      advancedStatsGrid.innerHTML = cards.map(([label, value]) => `
+        <div class="perf-card">
+          <div class="perf-label">${escapeHtml(label)}</div>
+          <div class="perf-value">${escapeHtml(value)}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderCompetitionsChips(competitions) {
+      competitionChips.innerHTML = competitions.length
+        ? competitions.slice(0, 12).map(name => `<span class="league-chip">${escapeHtml(name)}</span>`).join("")
+        : '<span class="league-chip">Aucune compétition trouvée</span>';
+    }
+
+    function renderSeasonTable(rows) {
+      if (!rows.length) {
+        seasonStatsTable.innerHTML = '<div class="empty-state" style="padding:10px;">Aucune statistique détaillée disponible.</div>';
+        return;
+      }
+
+      seasonStatsTable.innerHTML = `
+        <div class="season-row head">
+          <div>Compétition</div><div>Saison</div><div>MJ</div><div>Buts</div><div>Assists</div><div>Minutes</div>
+        </div>
+        ${rows.map(r => `
+          <div class="season-row">
+            <div class="comp">${escapeHtml(r.comp)}</div>
+            <div>${escapeHtml(r.saison)}</div>
+            <div>${escapeHtml(r.matchs)}</div>
+            <div>${escapeHtml(r.buts)}</div>
+            <div>${escapeHtml(r.assists)}</div>
+            <div>${escapeHtml(r.minutes)}</div>
+          </div>
+        `).join("")}
       `;
     }
 
@@ -1475,6 +1675,48 @@
       return extractResponseArray(data);
     }
 
+    async function fetchPlayerStatsById(playerId) {
+      const seasonsData = await apiFetch(`/players/seasons?player=${encodeURIComponent(playerId)}`);
+      const seasons = extractResponseArray(seasonsData)
+        .map(s => Number(s))
+        .filter(Number.isFinite)
+        .sort((a, b) => b - a)
+        .slice(0, 5);
+
+      const allRows = [];
+      for (const season of seasons) {
+        try {
+          const data = await apiFetch(`/players?id=${encodeURIComponent(playerId)}&season=${season}`);
+          const rows = extractResponseArray(data);
+          rows.forEach(entry => {
+            if (!entry?.statistics) return;
+            entry.statistics.forEach(stat => {
+              allRows.push({
+                league: { ...stat.league, season },
+                team: stat.team,
+                statistics: stat
+              });
+            });
+          });
+        } catch (err) {
+          console.warn(`Stats indisponibles pour la saison ${season}:`, err.message);
+        }
+      }
+      return allRows;
+    }
+
+    async function fetchPlayerTransfers(playerId) {
+      try {
+        const data = await apiFetch(`/transfers?player=${encodeURIComponent(playerId)}`);
+        const response = extractResponseArray(data);
+        const transfers = response.flatMap(item => Array.isArray(item.transfers) ? item.transfers : []);
+        return transfers;
+      } catch (err) {
+        console.warn("transfers indisponibles", err.message);
+        return [];
+      }
+    }
+
     async function fetchLeaguesByCountry(country, season) {
       const data = await apiFetch(`/leagues?country=${encodeURIComponent(country)}&season=${encodeURIComponent(season)}`);
       return dedupeLeagues(extractResponseArray(data));
@@ -1558,12 +1800,37 @@
       resetPlayerDetails();
       renderPlayerProfile(profile);
 
-      const teamsRaw = await fetchPlayerTeams(profile.id);
+      const [teamsRaw, statsRaw, transfers] = await Promise.all([
+        fetchPlayerTeams(profile.id),
+        fetchPlayerStatsById(profile.id),
+        fetchPlayerTransfers(profile.id)
+      ]);
       const teams = dedupeTeams(teamsRaw);
+      const enrichedTeams = [...teams];
 
-      renderCareerList(teams);
-      const countriesPlayed = await renderMap(profile, teams);
-      renderSummaries(profile, teams, countriesPlayed);
+      transfers.forEach(transfer => {
+        const teamName = transfer.teams?.in?.name;
+        if (!teamName) return;
+        const exists = enrichedTeams.some(t => (t.name || "").toLowerCase() === teamName.toLowerCase());
+        if (!exists) {
+          enrichedTeams.push({
+            id: transfer.teams?.in?.id || `transfer-${teamName}`,
+            name: teamName,
+            logo: transfer.teams?.in?.logo || "",
+            country: normalizeCountryName(transfer.teams?.in?.country),
+            seasons: transfer.date ? [String(new Date(transfer.date).getFullYear())] : []
+          });
+        }
+      });
+
+      const aggregated = aggregatePlayerStats(statsRaw);
+      renderAdvancedStats(aggregated.totals);
+      renderCompetitionsChips(aggregated.competitions);
+      renderSeasonTable(aggregated.perCompetition);
+
+      renderCareerList(enrichedTeams);
+      const countriesPlayed = await renderMap(profile, enrichedTeams);
+      renderSummaries(profile, enrichedTeams, countriesPlayed);
 
       statusEl.textContent = `Joueur chargé: ${profile.name}`;
     }
