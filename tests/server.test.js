@@ -19,7 +19,7 @@ test('GET / retourne index.html', async () => {
   const text = await res.text();
 
   assert.equal(res.status, 200);
-  assert.match(text, /Player Tracker sécurisé/);
+  assert.match(text, /Football Tracker V4/);
 
   await new Promise(resolve => server.close(resolve));
 });
